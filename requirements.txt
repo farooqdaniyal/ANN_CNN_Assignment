@@ -1,10 +1,8 @@
 streamlit
-tensorflow
+tensorflow==2.15.1
 numpy
 matplotlib
 pillow
-scikit-learn
 shap
 reportlab
-pandas
 gdown
