@@ -10,6 +10,8 @@ from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 import base64
+import os
+import gdown
 
 # === PAGE CONFIG ===
 st.set_page_config(
@@ -344,12 +346,32 @@ def extract_num(text):
 # === LOAD MODELS ===
 @st.cache_resource
 def load_models():
-    with st.spinner("🔄 Loading AI Models..."):
-        cnn = tf.keras.models.load_model('cnn_model.keras')
-        ann = tf.keras.models.load_model('ann_model.keras')
-        with open('scaler.pkl', 'rb') as f:
-            scaler = pickle.load(f)
-        return cnn, ann, scaler
+    # CNN Model download
+    if not os.path.exists('cnn_model.keras'):
+        with st.spinner("CNN model download ho raha hai... (222 MB)"):
+            gdown.download(
+                'https://drive.google.com/uc?id=1zsjTocDkWSAzai7ItYhJmkoQEbxqRz3x',
+                'cnn_model.keras', quiet=False
+            )
+    # ANN Model download
+    if not os.path.exists('ann_model.keras'):
+        with st.spinner("ANN model download ho raha hai..."):
+            gdown.download(
+                'https://drive.google.com/uc?id=18-XoiEAnQF1NY32W0_fyC_J2Z0RTnXQi',
+                'ann_model.keras', quiet=False
+            )
+    # Scaler download
+    if not os.path.exists('scaler.pkl'):
+        with st.spinner("Scaler download ho raha hai..."):
+            gdown.download(
+                'https://drive.google.com/uc?id=1rt6dGcYtb5mdGLasjeoVQ5wf_VGqsgPS',
+                'scaler.pkl', quiet=False
+            )
+    cnn = tf.keras.models.load_model('cnn_model.keras')
+    ann = tf.keras.models.load_model('ann_model.keras')
+    with open('scaler.pkl', 'rb') as f:
+        scaler = pickle.load(f)
+    return cnn, ann, scaler
 
 try:
     cnn_model, ann_model, scaler = load_models()
