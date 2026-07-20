@@ -126,6 +126,14 @@ def apply_custom_css():
         .info-box {
             border-left: 4px solid var(--brand-500);
         }
+        /* Force headings inside cards to always use our solid brand color —
+           prevents Streamlit's own theme color/opacity from making them
+           look faded or "half loaded". */
+        .stCard h1, .stCard h2, .stCard h3, .stCard h4,
+        .info-box h1, .info-box h2, .info-box h3, .info-box h4 {
+            color: var(--brand-900) !important;
+            opacity: 1 !important;
+        }
 
         /* ===== METRIC / RESULT CARDS ===== */
         .metric-card {
