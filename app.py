@@ -17,6 +17,15 @@ st.set_page_config(
     layout="wide"
 )
 
+# === HELPER FUNCTION (BUG FIX) ===
+def extract_num(text):
+    """
+    Extracts just the number inside the brackets from selectbox
+    strings like 'Male (1)'.
+    Example: 'Male (1)' -> 1 , 'No (0)' -> 0
+    """
+    return int(text.split('(')[1].replace(')', ''))
+
 # === LOAD MODELS ===
 @st.cache_resource
 def load_models():
@@ -75,6 +84,8 @@ if 'approved'     not in st.session_state:
     st.session_state.approved     = False
 if 'doctor_notes' not in st.session_state:
     st.session_state.doctor_notes = ""
+if 'decision_status' not in st.session_state:
+    st.session_state.decision_status = None   # "Approved" / "Modified" / "Rejected"
 if 'overlay_img'  not in st.session_state:
     st.session_state.overlay_img  = None
 
@@ -101,11 +112,11 @@ st.sidebar.markdown(f"Review : {'✅' if st.session_state.approved     else '⏳
 # ==========================================
 if page == "🫁 X-Ray Analysis":
     st.title("🫁 Chest X-Ray Analysis")
-    st.markdown("Chest X-ray upload karo — AI pneumonia detect karega")
+    st.markdown("Upload a Chest X-ray Image — AI Will Detect Pneumonia")
     st.divider()
 
     uploaded = st.file_uploader(
-        "X-Ray Image Upload karo (JPG/PNG)",
+        "Upload X-Ray Image (JPG/PNG)",
         type=['jpg','jpeg','png']
     )
 
@@ -119,7 +130,7 @@ if page == "🫁 X-Ray Analysis":
             st.subheader("📷 Original X-Ray")
             st.image(img, use_column_width=True)
 
-        with st.spinner("🔍 AI analyze kar raha hai..."):
+        with st.spinner("🔍 AI is analyzing..."):
             overlay, label, confidence = make_gradcam(img_array, cnn_model)
             st.session_state.overlay_img = overlay
 
@@ -133,25 +144,25 @@ if page == "🫁 X-Ray Analysis":
             if label == "PNEUMONIA":
                 st.error(f"🔴 {label}")
                 st.metric("Confidence", f"{confidence:.1f}%")
-                st.warning("⚠️ Doctor review zaroor karein!")
+                st.warning("⚠️ Please consult a doctor!")
             else:
                 st.success(f"🟢 {label}")
                 st.metric("Confidence", f"{confidence:.1f}%")
-                st.info("✅ Lungs clear hain")
+                st.info("✅ The lungs appear to be clear")
 
         st.session_state.xray_result = {
             'label'     : label,
             'confidence': confidence
         }
 
-        st.success("✅ Analysis complete! Sidebar se Doctor Review pe jao.")
+        st.success("✅ Analysis Complete! Please go to the 'Doctor Review' section in the sidebar.")
 
 # ==========================================
 # PAGE 2 — HEART DISEASE
 # ==========================================
 elif page == "❤️ Heart Disease":
     st.title("❤️ Heart Disease Risk Assessment")
-    st.markdown("Patient ki details enter karo")
+    st.markdown("Patient enter details — AI will predict heart disease risk")
     st.divider()
 
     col1, col2 = st.columns(2)
@@ -177,21 +188,26 @@ elif page == "❤️ Heart Disease":
 
     st.divider()
 
-    if st.button("🔍 Heart Disease Risk Predict karo", type="primary"):
+    if st.button("🔍 Heart Disease Risk Predict", type="primary"):
+        # === FIX APPLIED HERE: extract_num() is used ===
+        # sex, fbs, restecg, exang, slope, thal -> these are all in
+        # "Text (number)" format, so extract_num() needs to be applied.
+        # cp and ca are already plain number strings, so converting
+        # them with int() alone is enough.
         features = np.array([[
             age,
-            int(sex[0]),
+            extract_num(sex),
             int(cp),
             trestbps,
             chol,
-            int(fbs[0]),
-            int(restecg[0]),
+            extract_num(fbs),
+            extract_num(restecg),
             thalach,
-            int(exang[0]),
+            extract_num(exang),
             oldpeak,
-            int(slope[0]),
+            extract_num(slope),
             int(ca),
-            int(thal[0])
+            extract_num(thal)
         ]])
 
         features_scaled = scaler.transform(features)
@@ -207,15 +223,15 @@ elif page == "❤️ Heart Disease":
             if risk == "HIGH RISK":
                 st.error(f"🔴 {risk}")
                 st.metric("Disease Probability", f"{pred_prob*100:.1f}%")
-                st.warning("⚠️ Cardiologist se mile!")
+                st.warning("⚠️ See a cardiologist!")
             else:
                 st.success(f"🟢 {risk}")
                 st.metric("Disease Probability", f"{pred_prob*100:.1f}%")
-                st.info("✅ Heart healthy lag raha hai")
+                st.info("✅ Heart appears healthy")
 
         with col2:
             st.subheader("📊 SHAP Feature Impact")
-            with st.spinner("SHAP calculate ho raha hai..."):
+            with st.spinner("Calculating SHAP..."):
                 def model_pred(x):
                     return ann_model.predict(x, verbose=0).flatten()
 
@@ -246,17 +262,17 @@ elif page == "❤️ Heart Disease":
             'chol'       : chol,
             'heart_rate' : thalach
         }
-        st.success("✅ Assessment complete! Doctor Review pe jao.")
+        st.success("✅ Assessment complete! Go to Doctor Review.")
 
 # ==========================================
 # PAGE 3 — DOCTOR REVIEW
 # ==========================================
 elif page == "👨‍⚕️ Doctor Review":
     st.title("👨‍⚕️ Doctor Review Panel")
-    st.markdown("Human-in-the-Loop — Doctor AI results verify kare")
+    st.markdown("Human-in-the-Loop — Doctor verifies AI results")
     st.divider()
 
-    # Results dikhao
+    # Show results
     if st.session_state.xray_result:
         r = st.session_state.xray_result
         st.info(f"🫁 X-Ray AI Result: **{r['label']}** "
@@ -268,9 +284,17 @@ elif page == "👨‍⚕️ Doctor Review":
                 f"(Probability: {h['probability']:.1f}%)")
 
     if not st.session_state.xray_result and not st.session_state.heart_result:
-        st.warning("⚠️ Pehle X-Ray ya Heart analysis karo!")
+        st.warning("⚠️ Please do the X-Ray or Heart analysis first!")
 
     else:
+        # === Badge for current decision status (if a decision has already been made) ===
+        if st.session_state.decision_status == "Approved":
+            st.success("✅ Current Status: **APPROVED**")
+        elif st.session_state.decision_status == "Modified":
+            st.warning("✏️ Current Status: **MODIFIED**")
+        elif st.session_state.decision_status == "Rejected":
+            st.error("❌ Current Status: **REJECTED**")
+
         st.divider()
         st.subheader("👨‍⚕️ Doctor Decision")
 
@@ -290,28 +314,38 @@ elif page == "👨‍⚕️ Doctor Review":
             if st.button("✅ APPROVE",
                          type="primary",
                          use_container_width=True):
-                st.session_state.approved     = True
+                st.session_state.approved        = True
+                st.session_state.decision_status = "Approved"
                 st.session_state.doctor_notes = (
                     f"Diagnosis: {doctor_diagnosis}\n"
                     f"Notes: {notes}"
                 )
-                st.success("✅ Approved! PDF generate karo.")
+                st.success("✅ Approved! Now generate the PDF.")
                 st.balloons()
+                st.rerun()
 
         with col2:
             if st.button("❌ REJECT",
                          use_container_width=True):
-                st.session_state.approved = False
+                st.session_state.approved        = False
+                st.session_state.decision_status = "Rejected"
+                st.session_state.doctor_notes = (
+                    f"Diagnosis: {doctor_diagnosis}\n"
+                    f"Notes: {notes}"
+                )
                 st.error("❌ Rejected! Reanalysis required.")
+                st.rerun()
 
         with col3:
             if st.button("✏️ MODIFY",
                          use_container_width=True):
-                st.session_state.approved     = True
+                st.session_state.approved        = True
+                st.session_state.decision_status = "Modified"
                 st.session_state.doctor_notes = (
                     f"MODIFIED — {doctor_diagnosis}\n{notes}"
                 )
                 st.warning("✏️ Modified and saved!")
+                st.rerun()
 
 # ==========================================
 # PAGE 4 — PDF REPORT
@@ -320,16 +354,21 @@ elif page == "📄 PDF Report":
     st.title("📄 Medical Report Generator")
     st.divider()
 
-    if not st.session_state.approved:
-        st.warning("⚠️ Pehle Doctor Review pe jao aur Approve karo!")
-        st.info("Sidebar mein 👨‍⚕️ Doctor Review pe click karo")
+    if st.session_state.decision_status == "Rejected":
+        st.error("❌ The doctor has REJECTED the case — PDF cannot be generated.")
+        st.info("Go to 👨‍⚕️ Doctor Review for reanalysis or another review.")
+    elif not st.session_state.approved:
+        st.warning("⚠️ Please go to Doctor Review first and Approve/Modify!")
+        st.info("Click 👨‍⚕️ Doctor Review in the sidebar")
     else:
-        st.success("✅ Doctor approved — Report ready hai!")
+        status_label = st.session_state.decision_status or "Approved"
+        st.success(f"✅ Doctor Status: **{status_label}** — Report ready!")
 
         col1, col2 = st.columns(2)
 
         with col1:
             st.subheader("Report Preview")
+            st.markdown(f"**👨‍⚕️ Decision Status:** {status_label}")
             if st.session_state.xray_result:
                 r = st.session_state.xray_result
                 st.markdown(f"**🫁 X-Ray:** {r['label']} ({r['confidence']:.1f}%)")
@@ -339,7 +378,7 @@ elif page == "📄 PDF Report":
             st.markdown(f"**👨‍⚕️ Doctor Notes:** {st.session_state.doctor_notes}")
 
         with col2:
-            if st.button("📥 PDF Generate karo", type="primary"):
+            if st.button("📥 Generate PDF", type="primary"):
                 buffer = io.BytesIO()
                 doc    = SimpleDocTemplate(buffer, pagesize=letter)
                 styles = getSampleStyleSheet()
@@ -351,6 +390,13 @@ elif page == "📄 PDF Report":
                     styles['Title']
                 ))
                 story.append(Spacer(1, 20))
+
+                # Decision Status
+                story.append(Paragraph(
+                    f"Doctor Decision Status: {status_label}",
+                    styles['Heading2']
+                ))
+                story.append(Spacer(1, 10))
 
                 # X-Ray Results
                 if st.session_state.xray_result:
@@ -415,4 +461,4 @@ elif page == "📄 PDF Report":
                     file_name = "medical_report.pdf",
                     mime      = "application/pdf"
                 )
-                st.success("✅ PDF ready — Download karo!")
+                st.success("✅ PDF ready — download it!")
